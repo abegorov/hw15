@@ -1,0 +1,63 @@
+[sources.nginx_metrics]
+type = "nginx_metrics"
+endpoints = [
+  "http://localhost/server_status"
+]
+namespace = "nginx"
+scrape_interval_secs = 5
+
+[sources.nginx_json_log]
+type = "file"
+include = [
+  "/var/log/nginx/access.json.log"
+]
+
+[transforms.nginx_json_log_remap]
+type = "remap"
+inputs = [
+  "nginx_json_log"
+]
+metric_tag_values = "full"
+source = '''
+  . = parse_json!(del(.message))
+'''
+timezone = "UTC"
+
+[transforms.nginx_log_metrics]
+type = "log_to_metric"
+inputs = [
+  "nginx_json_log_remap"
+]
+
+[[transforms.nginx_log_metrics.metrics]]
+type = "counter"
+field = "status"
+name = "response_total"
+namespace = "nginx"
+
+[transforms.nginx_log_metrics.metrics.tags]
+method = "{{method}}"
+protocol = "{{protocol}}"
+status = "{{status}}"
+agent = "{{user_agent}}"
+
+[[transforms.nginx_log_metrics.metrics]]
+type = "histogram"
+field = "time"
+name = "response_time"
+namespace = "nginx"
+
+[transforms.nginx_log_metrics.metrics.tags]
+method = "{{method}}"
+protocol = "{{protocol}}"
+status = "{{status}}"
+agent = "{{user_agent}}"
+
+[sinks.prometheus_exporter]
+type = "prometheus_exporter"
+inputs = [
+  "nginx_metrics",
+  "nginx_log_metrics"
+]
+flush_period_secs = 2147483647
+address = "0.0.0.0:9598"
